@@ -34,6 +34,17 @@ class SelectNodeAction(pyblish.api.Action):
         OpenMaya.MGlobal.setActiveSelectionList(selection_list)
 
 
+class SimpleFixAction(pyblish.api.Action):
+    label = "Fix"
+    on = "failed"
+
+    def process(self, context, plugin):
+        params = function.ParamParser(plugin.Tester.GetParameters())
+
+        for node, component in plugin._nodes:
+            plugin.Tester.Fix(node, component, params)
+
+
 def _vaildator(tester):
     class Validator(pyblish.api.InstancePlugin):
         order = pyblish.api.ValidatorOrder
@@ -53,6 +64,9 @@ def _vaildator(tester):
                         Validator._nodes.append((node, component))
 
             assert not Validator._nodes, self.Tester.GetDescription()
+
+    if tester.IsFixable():
+        Validator.actions.append(SimpleFixAction)
 
     Validator.__name__ = tester.name()
     return Validator
