@@ -1,4 +1,5 @@
 from medic import function
+from maya import OpenMaya
 import pyblish.api
 
 
@@ -13,27 +14,45 @@ class KarteContext(pyblish.api.ContextPlugin):
             instance.data["karte"] = k
             instance.data["nodes"] = nodes
             instance.data["families"] = [k.name()]
-            instance.data["results"] = {}
+
+
+class SelectNodeAction(pyblish.api.Action):
+    label = "Select node(s)"
+    on = "failed"
+
+    def process(self, context, plugin):
+        selection_list = OpenMaya.MSelectionList()
+        for node, component in plugin._nodes:
+            if node.IsDagNode():
+                if component is not None:
+                    selection_list.add(node.getPath(), component)
+                else:
+                    selection_list.add(node.getPath())
+            else:
+                selection_list.add(node.object())
+
+        OpenMaya.MGlobal.setActiveSelectionList(selection_list)
 
 
 def _vaildator(tester):
     class Validator(pyblish.api.InstancePlugin):
         order = pyblish.api.ValidatorOrder
         Tester = tester
+        actions = [SelectNodeAction]
+        _nodes = []
 
         def process(self, instance):
-            tester_name = self.Tester.name()
+            Validator._nodes = []
+            tester_name = Validator.Tester.name()
 
             for node in instance.data["nodes"]:
-                if self.Tester.Match(node):
-                    result, component = self.Tester.Test(node)
+                if Validator.Tester.Match(node):
+                    result, component = Validator.Tester.Test(node)
 
                     if result:
-                        if not instance.data["results"].has_key(tester_name):
-                            instance.data["results"][tester_name] = []
-                        instance.data["results"][tester_name].append((node, component))
+                        Validator._nodes.append((node, component))
 
-            assert not instance.data["results"].get(tester_name), self.Tester.GetDescription()
+            assert not Validator._nodes, self.Tester.GetDescription()
 
     Validator.__name__ = tester.name()
     return Validator
