@@ -1,7 +1,19 @@
 from Qt import QtWidgets
 from maya import OpenMaya
 from medic.core import parameter
+from medic.core import testerBase
+from pyblish_lite import model
 import re
+
+
+class PyblishFunction():
+    @staticmethod
+    def GetPlugin(model_index):
+        return model_index.data(model.Object)
+
+    @staticmethod
+    def IsTesterPlugin(plugin):
+        return hasattr(plugin, "Tester") and hasattr(plugin, "Nodes")
 
 
 class MayaFunction():
@@ -147,10 +159,14 @@ class NodeList(QtWidgets.QListWidget):
 
 
 class TesterDetailWidget(QtWidgets.QWidget):
+    Width = 300
+    Height = 300
+
     def __init__(self, parent=None):
         super(TesterDetailWidget, self).__init__(parent)
-        self.__tester = None
-        self.__nodes = set()
+        self.__docking_parent = None
+        self.__docked = False
+        self.__plugin = None
         self.__params = []
 
         self.__qt_top_layout = None
@@ -165,9 +181,54 @@ class TesterDetailWidget(QtWidgets.QWidget):
         self.__createWidgets()
         self.__setSignals()
         self.__clear()
+        self.hide()
+        self.setFixedWidth(TesterDetailWidget.Width)
+
+    def show(self):
+        if self.__docking_parent and not self.__docked:
+            self.__docked = True
+            min_width = self.__docking_parent.minimumWidth()
+            cur_width = self.__docking_parent.width()
+            self.__docking_parent.setMinimumWidth(min_width + TesterDetailWidget.Width)
+            self.__docking_parent.resize(cur_width + TesterDetailWidget.Width, self.__docking_parent.height())
+        super(TesterDetailWidget, self).show()
+
+    def hide(self):
+        super(TesterDetailWidget, self).hide()
+        if self.__docking_parent and self.__docked:
+            self.__docked = False
+            min_width = self.__docking_parent.minimumWidth()
+            cur_width = self.__docking_parent.width()
+            self.__docking_parent.setMinimumWidth(min_width - TesterDetailWidget.Width)
+            self.__docking_parent.resize(max([min_width - TesterDetailWidget.Width, cur_width - TesterDetailWidget.Width]), self.__docking_parent.height())
+
+    def overviewChanged(self, current, previous):
+        if not current or current.row() < 0:
+            self.__clear()
+            self.hide()
+        else:
+            plugin = PyblishFunction.GetPlugin(current)
+            if PyblishFunction.IsTesterPlugin(plugin):
+                if plugin.Nodes:
+                    self.setPlugin(plugin)
+                    self.show()
+
+                else:
+                    self.__clear()
+                    self.hide()
+            else:
+                self.__clear()
+                self.hide()
+
+    def setDockingParent(self, p):
+        self.__docking_parent = p
+
+    def setPlugin(self, plugin):
+        self.__plugin = plugin
+        self.setTester(plugin.Tester)
+        self.setNodes(plugin.Nodes)
 
     def setTester(self, tester):
-        self.__tester = tester
         self.__setTesterName(tester.name())
         self.__setDescription(tester.description())
         self.__clearParameters()
@@ -176,9 +237,7 @@ class TesterDetailWidget(QtWidgets.QWidget):
 
     def setNodes(self, nodes):
         self.__qt_node_list.clear()
-        self.__nodes = nodes
-        self.__nodes = sorted(self.__nodes, key=lambda x: x[0].name())
-        for node in self.__nodes:
+        for node in sorted(nodes, key=lambda x: x[0].name()):
             self.__qt_node_list.addNode(node)
 
     def __createWidgets(self):
@@ -204,6 +263,7 @@ class TesterDetailWidget(QtWidgets.QWidget):
         # top
         self.__qt_tester_label = QtWidgets.QLabel()
         self.__qt_description = QtWidgets.QTextEdit()
+        self.__qt_description.setMaximumHeight(75)
         self.__qt_description.setReadOnly(True)
         
         self.__qt_node_list = NodeList()
@@ -225,8 +285,7 @@ class TesterDetailWidget(QtWidgets.QWidget):
         self.__qt_fix_selected_button.clicked.connect(self.__fixSelected)
 
     def __clear(self):
-        self.__tester = None
-        self.__nodes = set()
+        self.__plugin = None
         self.__qt_node_list.clear()
         self.__setTesterName("<UNKNOWN TESTER>")
         self.__setFixable(False)
@@ -285,20 +344,46 @@ class TesterDetailWidget(QtWidgets.QWidget):
         while (self.__qt_node_list.count() != 0):
             node_item = self.__qt_node_list.item(0)
             node, comp = node_item.nodeAndComponents()
-            if self.__tester.Fix(node, comp, parser):
+            if self.__plugin.Tester.Fix(node, comp, parser):
                 t_i = self.__qt_node_list.takeItem(0)
+                self.__plugin.removeNode(node, comp)
                 del t_i
 
     def __fixSelected(self):
         parser = ParameterFunctions.GetParmeterParser(self.__params)
         indices = []
+        node_comps = []
         for node_item in self.__qt_node_list.selectedItems():
             node, comp = node_item.nodeAndComponents()
-            if self.__tester.Fix(node, comp, parser):
+            if self.__plugin.Tester.Fix(node, comp, parser):
                 indices.append(self.__qt_node_list.indexFromItem(node_item).row())
+                node_comps.append((node, comp))
 
         indices.sort()
         indices.reverse()
         for i in indices:
             t_i = self.__qt_node_list.takeItem(i)
+            self.__plugin.removeNode(node, comp)
             del t_i
+        for node, comp in node_comps:
+            self.__plugin.removeNode(node, comp)
+
+
+def DockTesterDetail(win):
+    right_view = win.data.get("views", {}).get("right", None)
+    if right_view is None:
+        print "Could not find the 'right' view"
+        return
+
+    overview_page = win.data.get("pages", {}).get("overview", None)
+    if overview_page is None:
+        print "Could not find the 'overview' page"
+        return
+
+    tester_detail = TesterDetailWidget()
+    layout = overview_page.layout()
+    layout.addWidget(tester_detail)
+
+    tester_detail.setDockingParent(win)
+
+    right_view.currentIndexChanged.connect(tester_detail.overviewChanged)

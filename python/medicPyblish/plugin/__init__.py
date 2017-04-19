@@ -23,7 +23,7 @@ class SelectNodeAction(pyblish.api.Action):
 
     def process(self, context, plugin):
         selection_list = OpenMaya.MSelectionList()
-        for node, component in plugin._nodes:
+        for node, component in plugin.Nodes:
             if node.IsDagNode():
                 if component is not None:
                     selection_list.add(node.getPath(), component)
@@ -43,7 +43,7 @@ class SimpleFixAction(pyblish.api.Action):
         # TODO: do not access parameters directly
         params = parameter.ParameterParser(plugin.Tester.GetParameters())
 
-        for node, component in plugin._nodes:
+        for node, component in plugin.Nodes:
             plugin.Tester.Fix(node, component, params)
 
 
@@ -52,10 +52,18 @@ def _vaildator(tester):
         order = pyblish.api.ValidatorOrder
         Tester = tester
         actions = [SelectNodeAction]
-        _nodes = []
+        Nodes = []
+
+        @classmethod
+        def removeNode(klass, node, component):
+            for i, (n, c) in enumerate(Validator.Nodes):
+                if n == node and c == component:
+                    Validator.Nodes.pop(i)
+                    return True
+            return False
 
         def process(self, instance):
-            Validator._nodes = []
+            Validator.Nodes = []
             tester_name = Validator.Tester.name()
 
             for node in instance.data["nodes"]:
@@ -63,9 +71,9 @@ def _vaildator(tester):
                     result, component = Validator.Tester.Test(node)
 
                     if result:
-                        Validator._nodes.append((node, component))
+                        Validator.Nodes.append((node, component))
 
-            assert not Validator._nodes, self.Tester.GetDescription()
+            assert not Validator.Nodes, self.Tester.description()
 
     if tester.IsFixable():
         Validator.actions.append(SimpleFixAction)
