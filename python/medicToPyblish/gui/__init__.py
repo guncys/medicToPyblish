@@ -161,6 +161,7 @@ class NodeList(QtWidgets.QListWidget):
 class TesterDetailWidget(QtWidgets.QWidget):
     Width = 300
     Height = 300
+    ButtonFontSize = 8
 
     def __init__(self, parent=None):
         super(TesterDetailWidget, self).__init__(parent)
@@ -278,6 +279,9 @@ class TesterDetailWidget(QtWidgets.QWidget):
         self.__qt_bottom_layout.addWidget(self.__qt_select_button)
         self.__qt_bottom_layout.addWidget(self.__qt_fix_selected_button)
         self.__qt_bottom_layout.addWidget(self.__qt_fix_all_button)
+        self.__qt_select_button.setStyleSheet("font-size: %spt;" % TesterDetailWidget.ButtonFontSize)
+        self.__qt_fix_selected_button.setStyleSheet("font-size: %spt;" % TesterDetailWidget.ButtonFontSize)
+        self.__qt_fix_all_button.setStyleSheet("font-size: %spt;" % TesterDetailWidget.ButtonFontSize)
 
     def __setSignals(self):
         self.__qt_select_button.clicked.connect(self.__setSelection)
