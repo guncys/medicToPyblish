@@ -313,7 +313,7 @@ class TesterDetailWidget(QtWidgets.QWidget):
                 if w:
                     layout.removeWidget(w)
                     w.setParent(None)
-                layout.removeItem(item)
+
             else:
                 break
 
