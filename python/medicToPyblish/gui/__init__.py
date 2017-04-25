@@ -384,6 +384,7 @@ class ArtistViewSignalOverride():
     view = None
     play = None
     validate = None
+    previndex = None
 
     @staticmethod
     def release():
@@ -437,15 +438,44 @@ class ArtistViewSignalOverride():
 
     @staticmethod
     def onReset():
-        ArtistViewSignalOverride.onClicked(ArtistViewSignalOverride.model.index(0, 0))
+        ArtistViewSignalOverride.onClicked(None)
 
     @staticmethod
-    def onClicked(index):
+    def onClicked(index=None):
         if not ArtistViewSignalOverride.model or not ArtistViewSignalOverride.view:
             return
 
+        rows = []
+        if not index:
+           rows = []
+
+        elif ArtistViewSignalOverride.view.isControlPressed():
+            for row in range(ArtistViewSignalOverride.model.rowCount()):
+                i_index = ArtistViewSignalOverride.model.index(row, 0)
+                if ArtistViewSignalOverride.model.data(i_index, model.IsChecked):
+                    rows.append(row)
+
+            c_row = index.row()
+            c_index = ArtistViewSignalOverride.model.index(c_row, 0)
+
+            if ArtistViewSignalOverride.model.data(c_index, model.IsChecked) and c_row in rows:
+                rows.remove(c_row)
+            else:
+                rows.append(c_row)
+
+        elif not ArtistViewSignalOverride.view.isShiftPressed():
+            rows = [index.row()]
+
+        else:
+            prev = ArtistViewSignalOverride.previndex.row()
+            cur = index.row()
+            if prev <= cur:
+                rows = range(prev, cur + 1)
+            else:
+                rows = range(cur, prev + 1)
+
         row_count = ArtistViewSignalOverride.model.rowCount()
-        if row_count < 1:
+        if row_count < 1 or not rows:
             ArtistViewSignalOverride.play.setEnabled(False)
             ArtistViewSignalOverride.validate.setEnabled(False)
 
@@ -453,19 +483,22 @@ class ArtistViewSignalOverride():
             ArtistViewSignalOverride.play.setEnabled(True)
             ArtistViewSignalOverride.validate.setEnabled(True)
 
-            for row in range(ArtistViewSignalOverride.model.rowCount()):
-                state = False
-                if row == index.row():
-                    state = True
-                print row, state
-                i_index = ArtistViewSignalOverride.model.index(0, row)
-                ArtistViewSignalOverride.model.setData(i_index, state, model.IsChecked)
+        for row in range(ArtistViewSignalOverride.model.rowCount()):
+            state = False
+            if row in rows:
+                state = True
 
-                instance = ArtistViewSignalOverride.model.items[row]
-                util.defer(100, lambda: ArtistViewSignalOverride.window.controller.emit_(signal="instanceToggled",
-                                                                                         kwargs={"new_value": state,
-                                                                                                 "old_value": not state,
-                                                                                                 "instance": instance}))
+            i_index = ArtistViewSignalOverride.model.index(row, 0)
+            ArtistViewSignalOverride.model.setData(i_index, state, model.IsChecked)
+
+            instance = ArtistViewSignalOverride.model.items[row]
+            util.defer(100, lambda: ArtistViewSignalOverride.window.controller.emit_(signal="instanceToggled",
+                                                                                     kwargs={"new_value": state,
+                                                                                             "old_value": not state,
+                                                                                             "instance": instance}))
+
+        if not ArtistViewSignalOverride.view.isShiftPressed():
+            ArtistViewSignalOverride.previndex = index
 
 
 def DockTesterDetail(win):
