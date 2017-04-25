@@ -204,6 +204,10 @@ class TesterDetailWidget(QtWidgets.QWidget):
             self.__docking_parent.setMinimumWidth(min_width - TesterDetailWidget.Width)
             self.__docking_parent.resize(max([min_width - TesterDetailWidget.Width, cur_width - TesterDetailWidget.Width]), self.__docking_parent.height())
 
+    def onReset(self):
+        self.__clear()
+        self.hide()
+
     def overviewChanged(self, current, previous):
         if not current or current.row() < 0:
             self.__clear()
@@ -392,6 +396,11 @@ class ArtistViewSignalOverride():
         play = win.findChild(QtWidgets.QWidget, "Play")
         validate = win.findChild(QtWidgets.QWidget, "Validate")
 
+        has_toggled = True
+        has_on_item_toggled = True
+        has_reset = True
+
+
         if not inst_model or not view or not play or not validate:
             print "Could not override artist view signal : model '%s' view '%s' play '%s' validate '%s'" % (inst_model, view, play, validate)
             return
@@ -402,13 +411,23 @@ class ArtistViewSignalOverride():
 
         if not hasattr(view, "toggled"):
             print "Could not disconnect original signal : no 'toggled' signal"
+            has_toggled = False
 
         if not hasattr(win, "on_item_toggled"):
             print "Could not disconnect original slot : no 'on_item_toggled' slot"
+            has_on_item_toggled = False
 
-        view.toggled.disconnect(win.on_item_toggled)
+        if not hasattr(win.controller, "was_reset"):
+            print "Could not connect was_reset to onReset: not 'controller.was_reset'"
+            has_reset = False
+
+        if has_toggled and has_on_item_toggled:
+            view.toggled.disconnect(win.on_item_toggled)
+
+        if has_reset:
+            win.controller.was_reset.connect(ArtistViewSignalOverride.onReset)
+
         view.clicked.connect(ArtistViewSignalOverride.onClicked)
-        win.controller.was_reset.connect(ArtistViewSignalOverride.onReset)
 
         ArtistViewSignalOverride.window = win
         ArtistViewSignalOverride.model = inst_model
@@ -467,6 +486,16 @@ def DockTesterDetail(win):
     tester_detail.setDockingParent(win)
 
     right_view.currentIndexChanged.connect(tester_detail.overviewChanged)
+
+    if not hasattr(win, "controller"):
+        print "Could not connect controller.was_reset, no controller"
+        return
+
+    if not hasattr(win.controller, "was_reset"):
+        print "Could not connect controller.was_reset, no controller.was_reset"
+        return
+
+    win.controller.was_reset.connect(tester_detail.onReset)
 
 
 def OverrideArtistViewSignal(win):
