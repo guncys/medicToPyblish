@@ -3,6 +3,7 @@ from maya import OpenMaya
 from medic.core import parameter
 from medic.core import testerBase
 from pyblish_lite import model
+from pyblish_lite import util
 import re
 
 
@@ -373,6 +374,81 @@ class TesterDetailWidget(QtWidgets.QWidget):
             self.__plugin.removeNode(node, comp)
 
 
+class ArtistViewSignalOverride():
+    window = None
+    model = None
+    view = None
+    play = None
+    validate = None
+
+    @staticmethod
+    def release():
+        ArtistViewSignalOverride.window = None
+
+    @staticmethod
+    def override(win):
+        inst_model = win.data.get("models", {}).get("instances")
+        view = win.data.get("views", {}).get("artist")
+        play = win.findChild(QtWidgets.QWidget, "Play")
+        validate = win.findChild(QtWidgets.QWidget, "Validate")
+
+        if not inst_model or not view or not play or not validate:
+            print "Could not override artist view signal : model '%s' view '%s' play '%s' validate '%s'" % (inst_model, view, play, validate)
+            return
+
+        if not hasattr(win, "controller"):
+            print "Could not find controller"
+            return
+
+        if not hasattr(view, "toggled"):
+            print "Could not disconnect original signal : no 'toggled' signal"
+
+        if not hasattr(win, "on_item_toggled"):
+            print "Could not disconnect original slot : no 'on_item_toggled' slot"
+
+        view.toggled.disconnect(win.on_item_toggled)
+        view.clicked.connect(ArtistViewSignalOverride.onClicked)
+        win.controller.was_reset.connect(ArtistViewSignalOverride.onReset)
+
+        ArtistViewSignalOverride.window = win
+        ArtistViewSignalOverride.model = inst_model
+        ArtistViewSignalOverride.view = view
+        ArtistViewSignalOverride.play = play
+        ArtistViewSignalOverride.validate = validate
+
+    @staticmethod
+    def onReset():
+        ArtistViewSignalOverride.onClicked(ArtistViewSignalOverride.model.index(0, 0))
+
+    @staticmethod
+    def onClicked(index):
+        if not ArtistViewSignalOverride.model or not ArtistViewSignalOverride.view:
+            return
+
+        row_count = ArtistViewSignalOverride.model.rowCount()
+        if row_count < 1:
+            ArtistViewSignalOverride.play.setEnabled(False)
+            ArtistViewSignalOverride.validate.setEnabled(False)
+
+        else:
+            ArtistViewSignalOverride.play.setEnabled(True)
+            ArtistViewSignalOverride.validate.setEnabled(True)
+
+            for row in range(ArtistViewSignalOverride.model.rowCount()):
+                state = False
+                if row == index.row():
+                    state = True
+                print row, state
+                i_index = ArtistViewSignalOverride.model.index(0, row)
+                ArtistViewSignalOverride.model.setData(i_index, state, model.IsChecked)
+
+                instance = ArtistViewSignalOverride.model.items[row]
+                util.defer(100, lambda: ArtistViewSignalOverride.window.controller.emit_(signal="instanceToggled",
+                                                                                         kwargs={"new_value": state,
+                                                                                                 "old_value": not state,
+                                                                                                 "instance": instance}))
+
+
 def DockTesterDetail(win):
     right_view = win.data.get("views", {}).get("right", None)
     if right_view is None:
@@ -391,3 +467,8 @@ def DockTesterDetail(win):
     tester_detail.setDockingParent(win)
 
     right_view.currentIndexChanged.connect(tester_detail.overviewChanged)
+
+
+def OverrideArtistViewSignal(win):
+    ArtistViewSignalOverride.release()
+    ArtistViewSignalOverride.override(win)

@@ -24,5 +24,6 @@ def Show():
 
     if win != PYBLISH_WINDOW:
         gui.DockTesterDetail(win)
+        gui.OverrideArtistViewSignal(win)
 
     PYBLISH_WINDOW = win
