@@ -13,10 +13,17 @@ def regsiter():
     plugin.registerValidators()
 
 
+def setLogLevel():
+    import logging
+    logging.getLogger("pyblish").setLevel(logging.INFO)
+
+
 def Show():
     global PYBLISH_WINDOW
     import pyblish_lite
     from . import gui
+
+    setLogLevel()
 
     refresh()
 
