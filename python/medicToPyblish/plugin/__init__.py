@@ -47,12 +47,16 @@ class SimpleFixAction(pyblish.api.Action):
             plugin.Tester.Fix(node, component, params)
 
 
-def _vaildator(tester):
+def _vaildator(tester, families):
     class Validator(pyblish.api.InstancePlugin):
         order = pyblish.api.ValidatorOrder
         Tester = tester
         actions = [SelectNodeAction]
         Nodes = []
+
+        @classmethod
+        def setFamiles(klass, families):
+            klass.families = families
 
         @classmethod
         def removeNode(klass, node, component):
@@ -79,6 +83,8 @@ def _vaildator(tester):
         Validator.actions.append(SimpleFixAction)
 
     Validator.__name__ = tester.name()
+    Validator.setFamiles(families)
+
     return Validator
 
 
@@ -88,4 +94,9 @@ def registerContext():
 
 def registerValidators(forceReload=True):
     for tester in function.GetTesters(forceReload=forceReload):
-        pyblish.api.register_plugin(_vaildator(tester))
+        families = []
+        for k in function.GetKartes():
+            if k.testers().has_key(tester.name()):
+                families.append(k.name())
+
+        pyblish.api.register_plugin(_vaildator(tester, families))
