@@ -23,6 +23,8 @@ def Show():
     import pyblish_lite
     from . import gui
 
+    major, minor, patch = map(int, pyblish_lite.version.split("."))
+
     setLogLevel()
 
     refresh()
@@ -30,7 +32,13 @@ def Show():
     win = pyblish_lite.show()
 
     if win != PYBLISH_WINDOW:
+        print "-- setting medicToPyblish --"
+
+        print "-- dock TesterDetial viewer --"
         gui.DockTesterDetail(win)
-        gui.OverrideArtistViewSignal(win)
+
+        if minor < 8:
+            print "-- Override Artist View Event --"
+            gui.OverrideArtistViewSignal(win)
 
     PYBLISH_WINDOW = win
