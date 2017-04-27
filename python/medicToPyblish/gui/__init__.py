@@ -3,6 +3,7 @@ from maya import OpenMaya
 from medic.core import parameter
 from medic.core import testerBase
 from pyblish_lite import model
+from pyblish_lite import util
 import re
 
 
@@ -203,6 +204,10 @@ class TesterDetailWidget(QtWidgets.QWidget):
             self.__docking_parent.setMinimumWidth(min_width - TesterDetailWidget.Width)
             self.__docking_parent.resize(max([min_width - TesterDetailWidget.Width, cur_width - TesterDetailWidget.Width]), self.__docking_parent.height())
 
+    def onReset(self):
+        self.__clear()
+        self.hide()
+
     def overviewChanged(self, current, previous):
         if not current or current.row() < 0:
             self.__clear()
@@ -373,6 +378,129 @@ class TesterDetailWidget(QtWidgets.QWidget):
             self.__plugin.removeNode(node, comp)
 
 
+class ArtistViewSignalOverride():
+    window = None
+    model = None
+    view = None
+    play = None
+    validate = None
+    previndex = None
+
+    @staticmethod
+    def release():
+        ArtistViewSignalOverride.window = None
+
+    @staticmethod
+    def override(win):
+        inst_model = win.data.get("models", {}).get("instances")
+        view = win.data.get("views", {}).get("artist")
+        play = win.findChild(QtWidgets.QWidget, "Play")
+        validate = win.findChild(QtWidgets.QWidget, "Validate")
+
+        has_toggled = True
+        has_on_item_toggled = True
+        has_reset = True
+
+
+        if not inst_model or not view or not play or not validate:
+            print "Could not override artist view signal : model '%s' view '%s' play '%s' validate '%s'" % (inst_model, view, play, validate)
+            return
+
+        if not hasattr(win, "controller"):
+            print "Could not find controller"
+            return
+
+        if not hasattr(view, "toggled"):
+            print "Could not disconnect original signal : no 'toggled' signal"
+            has_toggled = False
+
+        if not hasattr(win, "on_item_toggled"):
+            print "Could not disconnect original slot : no 'on_item_toggled' slot"
+            has_on_item_toggled = False
+
+        if not hasattr(win.controller, "was_reset"):
+            print "Could not connect was_reset to onReset: not 'controller.was_reset'"
+            has_reset = False
+
+        if has_toggled and has_on_item_toggled:
+            view.toggled.disconnect(win.on_item_toggled)
+
+        if has_reset:
+            win.controller.was_reset.connect(ArtistViewSignalOverride.onReset)
+
+        view.clicked.connect(ArtistViewSignalOverride.onClicked)
+
+        ArtistViewSignalOverride.window = win
+        ArtistViewSignalOverride.model = inst_model
+        ArtistViewSignalOverride.view = view
+        ArtistViewSignalOverride.play = play
+        ArtistViewSignalOverride.validate = validate
+
+    @staticmethod
+    def onReset():
+        ArtistViewSignalOverride.onClicked(None)
+
+    @staticmethod
+    def onClicked(index=None):
+        if not ArtistViewSignalOverride.model or not ArtistViewSignalOverride.view:
+            return
+
+        rows = []
+        if not index:
+           rows = []
+
+        elif ArtistViewSignalOverride.view.isControlPressed():
+            for row in range(ArtistViewSignalOverride.model.rowCount()):
+                i_index = ArtistViewSignalOverride.model.index(row, 0)
+                if ArtistViewSignalOverride.model.data(i_index, model.IsChecked):
+                    rows.append(row)
+
+            c_row = index.row()
+            c_index = ArtistViewSignalOverride.model.index(c_row, 0)
+
+            if ArtistViewSignalOverride.model.data(c_index, model.IsChecked) and c_row in rows:
+                rows.remove(c_row)
+            else:
+                rows.append(c_row)
+
+        elif not ArtistViewSignalOverride.view.isShiftPressed():
+            rows = [index.row()]
+
+        else:
+            prev = ArtistViewSignalOverride.previndex.row()
+            cur = index.row()
+            if prev <= cur:
+                rows = range(prev, cur + 1)
+            else:
+                rows = range(cur, prev + 1)
+
+        row_count = ArtistViewSignalOverride.model.rowCount()
+        if row_count < 1 or not rows:
+            ArtistViewSignalOverride.play.setEnabled(False)
+            ArtistViewSignalOverride.validate.setEnabled(False)
+
+        else:
+            ArtistViewSignalOverride.play.setEnabled(True)
+            ArtistViewSignalOverride.validate.setEnabled(True)
+
+        for row in range(ArtistViewSignalOverride.model.rowCount()):
+            state = False
+            if row in rows:
+                state = True
+
+            i_index = ArtistViewSignalOverride.model.index(row, 0)
+            ArtistViewSignalOverride.model.setData(i_index, state, model.IsChecked)
+
+            instance = ArtistViewSignalOverride.model.items[row]
+            util.defer(100, lambda: ArtistViewSignalOverride.window.controller.emit_(signal="instanceToggled",
+                                                                                     kwargs={"new_value": state,
+                                                                                             "old_value": not state,
+                                                                                             "instance": instance}))
+
+        if not ArtistViewSignalOverride.view.isShiftPressed():
+            ArtistViewSignalOverride.previndex = index
+
+
 def DockTesterDetail(win):
     right_view = win.data.get("views", {}).get("right", None)
     if right_view is None:
@@ -391,3 +519,18 @@ def DockTesterDetail(win):
     tester_detail.setDockingParent(win)
 
     right_view.currentIndexChanged.connect(tester_detail.overviewChanged)
+
+    if not hasattr(win, "controller"):
+        print "Could not connect controller.was_reset, no controller"
+        return
+
+    if not hasattr(win.controller, "was_reset"):
+        print "Could not connect controller.was_reset, no controller.was_reset"
+        return
+
+    win.controller.was_reset.connect(tester_detail.onReset)
+
+
+def OverrideArtistViewSignal(win):
+    ArtistViewSignalOverride.release()
+    ArtistViewSignalOverride.override(win)
