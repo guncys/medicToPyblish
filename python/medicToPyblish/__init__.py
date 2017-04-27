@@ -34,7 +34,7 @@ def Show():
     if win != PYBLISH_WINDOW:
         print "-- setting medicToPyblish --"
 
-        print "-- dock TesterDetial viewer --"
+        print "-- dock TesterDetail viewer --"
         gui.DockTesterDetail(win)
 
         if minor < 8:
