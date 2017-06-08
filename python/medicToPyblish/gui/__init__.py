@@ -349,14 +349,20 @@ class TesterDetailWidget(QtWidgets.QWidget):
 
     def __fixAll(self):
         parser = ParameterFunctions.GetParmeterParser(self.__params)
-
+        failed = []
         while (self.__qt_node_list.count() != 0):
             node_item = self.__qt_node_list.item(0)
             node, comp = node_item.nodeAndComponents()
-            if self.__plugin.Tester.Fix(node, comp, parser):
-                t_i = self.__qt_node_list.takeItem(0)
+            if not self.__plugin.Tester.Fix(node, comp, parser):
+                failed.append((node, comp))
+            else:
                 self.__plugin.removeNode(node, comp)
-                del t_i
+
+            t_i = self.__qt_node_list.takeItem(0)
+            del t_i
+
+        for node_comp in failed:
+            self.__qt_node_list.addNode(node_comp)
 
     def __fixSelected(self):
         parser = ParameterFunctions.GetParmeterParser(self.__params)
