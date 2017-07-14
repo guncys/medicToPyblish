@@ -1,20 +1,18 @@
-from medic import function
-from maya import OpenMaya
-from medic.core import parameter
 import pyblish.api
+from maya import OpenMaya
+import medic
 
 
 class KarteContext(pyblish.api.ContextPlugin):
     order = pyblish.api.CollectorOrder
 
     def process(self, context):
-        nodes = function.GetAllNodes()
-        kartes = function.GetKartes()
-        for k in kartes:
-            instance = context.create_instance("Medic/%s" % (k.name()), family="karte")
-            instance.data["karte"] = k
-            instance.data["nodes"] = nodes
-            instance.data["families"] = [k.name()]
+        plugin_manager = medic.PluginManager()
+        for k in plugin_manager.karteNames():
+            instance = context.create_instance("Medic/%s" % (k), family="karte")
+            instance.data["karte"] = plugin_manager.karte(k)
+            instance.data["visitor"] = medic.Visitor()
+            instance.data["families"] = [k]
 
 
 class SelectNodeAction(pyblish.api.Action):
@@ -23,16 +21,10 @@ class SelectNodeAction(pyblish.api.Action):
 
     def process(self, context, plugin):
         selection_list = OpenMaya.MSelectionList()
-        for node, component in plugin.Nodes:
-            if node.IsDagNode():
-                if component is not None:
-                    selection_list.add(node.getPath(), component)
-                else:
-                    selection_list.add(node.getPath())
-            else:
-                selection_list.add(node.object())
-
         OpenMaya.MGlobal.setActiveSelectionList(selection_list)
+
+        for r in plugin.Reports:
+            r.addSelection()
 
 
 class SimpleFixAction(pyblish.api.Action):
@@ -40,50 +32,35 @@ class SimpleFixAction(pyblish.api.Action):
     on = "failed"
 
     def process(self, context, plugin):
-        # TODO: do not access parameters directly
-        params = parameter.ParameterParser(plugin.Tester.GetParameters())
+        if plugin.Tester.IsFixable():
+            params = plugin.Tester.GetParameters()
 
-        for node, component in plugin.Nodes:
-            plugin.Tester.Fix(node, component, params)
+            for report in plugin.Reports:
+                plugin.Tester.fix(report, params)
 
 
 def _vaildator(tester, families):
     class Validator(pyblish.api.InstancePlugin):
         order = pyblish.api.ValidatorOrder
         Tester = tester
+        Reports = []
         actions = [SelectNodeAction]
-        Nodes = []
 
         @classmethod
         def setFamiles(klass, families):
             klass.families = families
 
-        @classmethod
-        def removeNode(klass, node, component):
-            for i, (n, c) in enumerate(Validator.Nodes):
-                if n == node and c == component:
-                    Validator.Nodes.pop(i)
-                    return True
-            return False
-
         def process(self, instance):
-            Validator.Nodes = []
-            tester_name = Validator.Tester.name()
+            Validator.Reports = []
+            instance.data["visitor"].visit(instance.data["karte"], Validator.Tester)
+            Validator.Reports = instance.data["visitor"].results(Validator.Tester)
 
-            for node in instance.data["nodes"]:
-                if Validator.Tester.Match(node):
-                    result, component = Validator.Tester.Test(node)
+            assert not Validator.Reports, Validator.Tester.Description()
 
-                    if result:
-                        Validator.Nodes.append((node, component))
-
-            assert not Validator.Nodes, self.Tester.description()
-
+    Validator.__name__ = tester.Name()
+    Validator.setFamiles(families)
     if tester.IsFixable():
         Validator.actions.append(SimpleFixAction)
-
-    Validator.__name__ = tester.name()
-    Validator.setFamiles(families)
 
     return Validator
 
@@ -92,11 +69,15 @@ def registerContext():
     pyblish.api.register_plugin(KarteContext)
 
 
-def registerValidators(forceReload=True):
-    for tester in function.GetTesters(forceReload=forceReload):
+def registerValidators():
+    plugin_manager = medic.PluginManager()
+    for tester_name in plugin_manager.testerNames():
         families = []
-        for k in function.GetKartes():
-            if k.testers().has_key(tester.name()):
-                families.append(k.name())
+        tester = plugin_manager.tester(tester_name)
+
+        for karte_name in plugin_manager.karteNames():
+            karte = plugin_manager.karte(karte_name)
+            if karte.hasTester(tester):
+                families.append(karte_name)
 
         pyblish.api.register_plugin(_vaildator(tester, families))
