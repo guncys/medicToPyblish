@@ -134,9 +134,9 @@ class ReportItem(QtWidgets.QListWidgetItem):
         return self.__report
 
 
-class RportList(QtWidgets.QListWidget):
+class ReportList(QtWidgets.QListWidget):
     def __init__(self, parent=None):
-        super(RportList, self).__init__(parent)
+        super(ReportList, self).__init__(parent)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
 
     def addReport(self, report):
@@ -262,7 +262,7 @@ class TesterDetailWidget(QtWidgets.QWidget):
         self.__qt_description.setMaximumHeight(75)
         self.__qt_description.setReadOnly(True)
         
-        self.__qt_report_list = RportList()
+        self.__qt_report_list = ReportList()
         self.__qt_top_layout.addWidget(self.__qt_tester_label)
         self.__qt_top_layout.addWidget(self.__qt_description)
         self.__qt_top_layout.addWidget(self.__qt_report_list)
