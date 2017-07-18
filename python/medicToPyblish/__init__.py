@@ -4,10 +4,10 @@ PYBLISH_WINDOW = None
 def refresh():
     import pyblish.api
     pyblish.api.deregister_all_plugins()
-    regsiter()
+    Regsiter()
 
 
-def regsiter():
+def Regsiter():
     from . import plugin
     plugin.registerContext()
     plugin.registerValidators()
