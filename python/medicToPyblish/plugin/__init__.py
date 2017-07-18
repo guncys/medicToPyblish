@@ -52,8 +52,8 @@ def _vaildator(tester, families):
 
         def process(self, instance):
             Validator.Reports = []
-            instance.data["visitor"].visit(instance.data["karte"], Validator.Tester)
-            Validator.Reports = instance.data["visitor"].results(Validator.Tester)
+            instance.data["visitor"].test(instance.data["karte"], Validator.Tester)
+            Validator.Reports = instance.data["visitor"].report(Validator.Tester)
 
             assert not Validator.Reports, Validator.Tester.Description()
 
